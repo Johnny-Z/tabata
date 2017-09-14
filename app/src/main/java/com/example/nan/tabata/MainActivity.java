@@ -12,6 +12,9 @@ import android.os.CountDownTimer;
 import android.os.Handler;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
+import android.support.v4.view.GravityCompat;
+import android.support.v4.widget.DrawerLayout;
+import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -20,6 +23,7 @@ import android.widget.Button;
 import android.widget.Chronometer;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.Toast;
 
 import com.bumptech.glide.Glide;
 
@@ -42,6 +46,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private long iCount;
     public SoundPool pool;
     private int soundId,soundId1;
+    public SwipeRefreshLayout swipeRefresh;
+    public DrawerLayout drawerLayout;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,26 +59,37 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             getWindow().setStatusBarColor(Color.TRANSPARENT);
         }
         setContentView(R.layout.tobata_main);
+        
         exerciseET= (EditText) findViewById(R.id.et_exercise);
         restET= (EditText) findViewById(R.id.et_rest);
         startBT= (Button) findViewById(R.id.bt_starttime);
         stopBT= (Button) findViewById(R.id.bt_stoptime);
         usedCHR= (Chronometer) findViewById(R.id.chr_used);
         bingPicIMG= (ImageView) findViewById(R.id.bing_pic_img);
+        
+        swipeRefresh = (SwipeRefreshLayout) findViewById(R.id.swipe_refresh);
+        swipeRefresh.setColorSchemeResources(R.color.colorPrimary);
+        drawerLayout= (DrawerLayout) findViewById(R.id.drawer_layout);
 
-//        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-//        String bingPic = prefs.getString("bing_pic", null);
-//        if (bingPic != null) {
-//            Glide.with(this).load(bingPic).into(bingPicIMG);
-//        } else {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        String bingPic = prefs.getString("bing_pic", null);
+        if (bingPic != null) {
+            Glide.with(this).load(bingPic).into(bingPicIMG);
+        } else {
             loadBingPic();//加载bing每日一图
-//        }
+        }
         pool = new SoundPool.Builder().setMaxStreams(20).build();
         soundId = pool.load(this, R.raw.dog, 1);
         soundId1 = pool.load(this, R.raw.countdown, 2);
         
         startBT.setOnClickListener(this);
         stopBT.setOnClickListener(this);
+        swipeRefresh.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
+            @Override
+            public void onRefresh() {
+                loadBingPic();
+            }
+        });
     }
 
     private void loadBingPic() {
@@ -80,22 +97,30 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         HttpUtil.sendOkHttpRequest(requestBingPic, new Callback() {
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                final String bingPic = response.body().string();
-//                SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(MainActivity.this).edit();
-//                editor.putString("bing_pic", bingPic);
-//                editor.apply();
+            public void onFailure(Call call, IOException e) {
+                e.printStackTrace();
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        Glide.with(MainActivity.this).load(bingPic).into(bingPicIMG);
+                        Toast.makeText(MainActivity.this, "刷新背景图失败", Toast.LENGTH_SHORT).show();
+                        swipeRefresh.setRefreshing(false);
                     }
                 });
             }
 
             @Override
-            public void onFailure(Call call, IOException e) {
-                e.printStackTrace();
+            public void onResponse(Call call, Response response) throws IOException {
+                final String bingPic = response.body().string();
+                SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(MainActivity.this).edit();
+                editor.putString("bing_pic", bingPic);
+                editor.apply();
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Glide.with(MainActivity.this).load(bingPic).into(bingPicIMG);
+                        swipeRefresh.setRefreshing(false);
+                    }
+                });
             }
         });
     }
@@ -108,6 +133,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 final Dialog dia = new Dialog(MainActivity.this, R.style.MyCommonDialog);
                 dia.setContentView(R.layout.dialog_custom);
 
+//                drawerLayout.openDrawer(GravityCompat.START);
+                
                 numIMG = (ImageView) dia.findViewById(R.id.iv_num);
                 numIMG.setBackgroundResource(R.drawable.three);//加载dialog的方式实现倒计时动画
                 dia.show();
